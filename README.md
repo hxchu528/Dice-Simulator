@@ -15,7 +15,10 @@
 #### Creating Dice
 1. Click `New face+`
 2. Add points
+![Adding face diagram](./img/Dice_face.png)
 3. Click `Create Shape`
+4. Edit face
+![Edit face diagram](./img/Add_face.png)
 
 #### Rolling Dice
 1. Click `Roll Dice`

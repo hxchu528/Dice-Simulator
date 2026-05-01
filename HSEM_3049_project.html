@@ -49,7 +49,7 @@
 		<div id = "dice">
 			<canvas id = "ca"></canvas>
 			<div class="interface">
-				<div style="display:block" class = "editDice"><button>New Face+</button><button>Roll Dice</button><button>Export</button><br><label for = "diceFile">Load Dice File:</label><input type = "file" id = "fileInput" name = "diceFile"></div>
+				<div style="display:block" class = "editDice"><button>New Face+</button><button>Roll Dice</button><button>Export</button><br><label for = "diceFile">Load Dice File: </label><input type = "file" id = "fileInput" name = "diceFile"></div>
 				<div style="display:none;" class = "editDice"><button>Edit dice</button><button>Roll</button></div>
 				<div id = "diceConsole"></div>
 			</div>
@@ -528,7 +528,8 @@
 			aggr.body.setLinearDamping(0);
 			aggr.body.setAngularDamping(0);
 			aggr.body.setLinearVelocity(new BABYLON.Vector3(0, 10, 0));
-			aggr.body.setAngularVelocity(new BABYLON.Vector3(0, 3, 3));
+			let ang = [0,0,0].map(i=>Math.random()*20-10);
+			aggr.body.setAngularVelocity(new BABYLON.Vector3(ang[0], ang[1], ang[2]));
 			let groundAggr = new BABYLON.PhysicsAggregate(Grid.ground,BABYLON.PhysicsShapeType.BOX,{mass:0},scene);
 		})
 		document.getElementsByClassName("editDice")[0].getElementsByTagName("button")[2].addEventListener("click",()=>{
