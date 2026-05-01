@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html>
+	<style>
+		body{
+			margin:0px;
+			width:100%;
+			height:100%;
+			overflow:hidden;
+		}
+		#ca, #grid{
+			display:flex;
+			float:left;
+			width:75%;
+			height:100vh;
+		}
+		.interface{
+			height:100vh;
+			overflow:auto;
+			padding:5px;
+		}
+		.editDice button {
+			margin:3px;
+		}
+		#face{
+			display:none;
+		}
+		#dice{
+			display:block;
+		}
+	</style>
+	<body>
+		<div id = "face">
+			<canvas id = "grid" style = "border:1px solid;"></canvas>
+			<div class = "interface" >
+				<button>Back</button><button>Create Shape</button><br>
+				<label for = "color">Color:</label>
+				<input name = "color" type = "color" id = "color"><br>
+				<label for = "shape">Select Shape:</label>
+				<select name = "shape" id = "shape">
+					<option value="custom">Custom</option>
+					<option value="triangle">Triangle</option>
+					<option value="square">Square</option>
+					<option value="pentagon">Pentagon</option>
+					<option value="hexagon">Hexagon</option>
+					<option value="octagon">Octagon</option>
+				</select>
+			</div>
+		</div>
+		<div id = "dice">
+			<canvas id = "ca"></canvas>
+			<div class="interface">
+				<div style="display:block" class = "editDice"><button>New Face+</button><button>Roll Dice</button><button>Export</button><br><label for = "diceFile">Load Dice File:</label><input type = "file" id = "fileInput" name = "diceFile"></div>
+				<div style="display:none;" class = "editDice"><button>Edit dice</button><button>Roll</button></div>
+				<div id = "diceConsole"></div>
+			</div>
+		</div>
+    </body>
+	<script src = "https://cdn.jsdelivr.net/npm/earcut@2.2.4/dist/earcut.min.js"></script>
+    <script src = "https://cdnjs.cloudflare.com/ajax/libs/babylonjs/8.20.0/babylon.min.js"></script>
+	<script src = "https://cdn.babylonjs.com/havok/HavokPhysics_umd.js"></script>
+	<script>
+		let havokInstance, hk, aggr;
+		let faceCanvas = document.getElementById("grid");
+		let ctx = faceCanvas.getContext("2d");
+		let interfaces = document.getElementsByClassName("interface");
+		let c = document.getElementById("ca");
+		let engine = new BABYLON.Engine(c);
+		let scene = new BABYLON.Scene(engine);
+		let camera = new BABYLON.ArcRotateCamera("camera",-Math.PI/2,Math.PI/2,10,new BABYLON.Vector3(0,0,0),scene);
+		let light = new BABYLON.HemisphericLight("light",new BABYLON.Vector3(0,1,0),scene)
+		camera.attachControl(c);
+        camera.minZ=0;/*
+		camera.keysUp = [87,38];
+		camera.keysDown = [83,40];
+		camera.keysLeft = [65,37];
+		camera.keysRight = [68,39];*/
+		HavokPhysics().then((havok)=>{
+			havokInstance = havok;
+			hk = new BABYLON.HavokPlugin(true,havokInstance);
+			scene.enablePhysics(new BABYLON.Vector3(0,-9.8,0),hk);
+		})
+		function ensureCCW(vertices) {
+			let sum = 0;
+			for (let i = 0; i < vertices.length; i++) {
+				let v1 = vertices[i];
+				let v2 = vertices[(i + 1) % vertices.length];
+				sum += (v2[0] - v1[0]) * (v2[1] + v1[1]);
+			}
+			return sum > 0 ? vertices.reverse() : vertices;
+		}
+		function map(n,or1,or2,r1,r2){return r1+(r2-r1)*((n-or1)/(or2-or1));}
+		class Grid{
+			static options = [];
+			static lines = [];
+			static cones = [];
+			static materials = [];
+			static face = [];
+			static faceVertex = [];
+			static ground = null;
+			static dice = null;
+			static rollDice = false;
+			static div = document.getElementById("diceConsole");
+			static draw(){
+				for(let i = 0; i<3; i++){
+					let axis = (1<<i)
+					this.options.push({updatable:true,points:[new BABYLON.Vector3(-(axis&1),-(axis&2)>>1,-(axis&4)>>2),new BABYLON.Vector3(axis&1,(axis&2)>>1,(axis&4)>>2)]})
+					this.lines.push(BABYLON.MeshBuilder.CreateLines("axis",this.options[i],scene));
+                    this.lines[i].color = new BABYLON.Color3(axis&1,(axis&2)>>1,(axis&4)>>2);
+                    this.cones.push(BABYLON.MeshBuilder.CreateCylinder("arrow",{diameterBottom:0.15,diameterTop:0,height:0.15},scene));
+                    this.cones[i].position = new BABYLON.Vector3(axis&1,(axis&2)>>1,(axis&4)>>2);
+                    this.cones[i].rotation = new BABYLON.Vector3(axis&1?Math.PI/2:0,((axis&2)>>1)?0:Math.PI/2,((axis&4)>>2)*Math.PI/2);
+                    this.materials.push(new BABYLON.StandardMaterial("coneMaterial",scene));
+                    this.materials[i].diffuseColor = new BABYLON.Color3(axis&1,(axis&2)>>1,(axis&4)>>2);
+                    this.cones[i].material = this.materials[i];
+				}
+			}
+			static scale(){
+				for(let i = 0; i<3; i++){
+					let axis = (1<<i);
+					this.options[i].points[0].x = -(axis&1)*camera.radius/2
+					this.options[i].points[1].x = (axis&1)*camera.radius/2
+					this.options[i].points[0].y = -((axis&2)>>1)*camera.radius/2
+					this.options[i].points[1].y = ((axis&2)>>1)*camera.radius/2
+					this.options[i].points[0].z = -((axis&4)>>2)*camera.radius/2
+					this.options[i].points[1].z = ((axis&4)>>2)*camera.radius/2
+					this.options[i].instance = this.lines[i];
+					this.lines[i] = BABYLON.MeshBuilder.CreateLines("lines",this.options[i])
+                    this.cones[i].scaling.setAll(Math.abs(camera.radius)/10);
+                    this.cones[i].position = new BABYLON.Vector3((axis&1)*camera.radius/3,((axis&2)>>1)*camera.radius/3,((axis&4)>>2)*camera.radius/3);
+				}
+			}
+			static dispose(){
+				while(this.lines.length>0){
+					this.lines[0].dispose();
+					this.lines.shift();
+					this.options.shift();
+				}
+				while(this.cones.length>0){
+                    this.cones[0].material.dispose();
+                    this.cones[0].dispose();
+                    this.cones.shift();
+				}
+				while(this.materials.length>0){
+					this.materials[0].dispose();
+					this.materials.shift();
+				}
+			}
+			static addShape(array,color){
+				let path = [];
+				for(let i = 0; i<array.length; i++){
+					path.push(new BABYLON.Vector3(array[i][0],0,array[i][1]));
+				}
+				this.faceVertex.push(array);
+				let polygon = BABYLON.MeshBuilder.CreatePolygon("face",{shape:path,sideOrientation:BABYLON.Mesh.DOUBLESIDE},scene);
+				polygon.rotationQuaternion = new BABYLON.Quaternion.RotationYawPitchRoll(0,-Math.PI/2,0)
+				let material = new BABYLON.StandardMaterial("faceMaterial",scene);
+				let r = parseInt(color.substring(1,3),16);
+				let g = parseInt(color.substring(3,5),16);
+				let b = parseInt(color.substring(5),16);
+				material.diffuseColor = new BABYLON.Color3(r/255,g/255,b/255);
+				polygon.material = material;
+				this.face.push(polygon);
+			}
+			static getShapeVertex(ind){
+				let obj = {};
+				let lst = this.face[ind].getVerticesData(BABYLON.VertexBuffer.PositionKind);
+				for(let i = 0; i<lst.length; i+=3){
+					if(obj.hasOwnProperty(`${lst[i]},${lst[i+1]},${lst[i+2]}`)){continue;}
+					obj[`${lst[i]},${lst[i+1]},${lst[i+2]}`]=new BABYLON.Vector3(lst[i],lst[i+1],lst[i+2]);//{x:lst[i],y:lst[i+1],z:lst[i+2]}
+				}
+				let out = Object.values(obj);
+				let worldMatrix = this.face[ind].computeWorldMatrix(true);
+				let worldVertices = out.map(v=>BABYLON.Vector3.TransformCoordinates(v,worldMatrix))
+				return worldVertices;
+			}
+			static addInput(){
+				let div = this.div;//interfaces[1].getElementsByTagName("div")[0];
+				let children = div.childElementCount;
+				for(let i = children; i<this.face.length; i++){
+					let angle;// = this.face[i].rotationQuaternion.toEulerAngles();
+					if(this.face[i].rotationQuaternion!=null){
+						angle = this.face[i].rotationQuaternion.toEulerAngles();
+					}else{
+						angle = this.face[i].rotation;
+					}
+					div.innerHTML+=`
+					<div style = "border-top:1px solid;margin:5px 0px; padding-top:5px;">
+						<label for = "x">X:</label><input name = "x" value = ${this.face[i].position.x} style="width:50px">
+						<label for = "y">Y:</label><input name = "y" value = ${this.face[i].position.y} style="width:50px">
+						<label for = "z">Z:</label><input name = "z" value = ${this.face[i].position.z} style="width:50px"><br>
+						<label for = "xRot">X Rotation (deg): </label><input name = "xRot" value = ${angle.x*180/Math.PI}><br>
+						<label for = "yRot">Y Rotation (deg): </label><input name = "yRot" value = ${angle.y*180/Math.PI}><br>
+						<label for = "zRot">Z Rotation (deg): </label><input name = "zRot" value = ${angle.z*180/Math.PI}><br>
+						<button style="background-color:rgb(255,200,200);cursor:pointer">Delete</button>
+					</div>
+					`
+				}
+				div.querySelectorAll("div").forEach((inp,ind)=>{
+					inp.addEventListener("change",()=>{
+						let val = inp.querySelectorAll("input");
+						this.face[ind].position = new BABYLON.Vector3(val[0].value,val[1].value,val[2].value);
+						let qx = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X,val[3].value*Math.PI/180);
+						let qy = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y,val[4].value*Math.PI/180);
+						let qz = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z,val[5].value*Math.PI/180);
+						let q = qz.multiply(qy).multiply(qx)
+						this.face[ind].rotationQuaternion = q;
+					})
+					inp.addEventListener("mouseover",()=>{
+						for(let i = 0; i<this.face.length; i+=1){
+							if(i===ind){this.face[i].visibility=1;}
+							else{this.face[i].visibility=0.1;}
+						}
+					})
+					inp.addEventListener("mouseout",()=>{
+						for(let i = 0; i<this.face.length; i+=1){
+							this.face[i].visibility = 1;
+						}
+					})
+				})
+				let btn = div.querySelectorAll("div button");
+				btn.forEach((val,ind)=>{
+					val.addEventListener("click",()=>{
+						let parent = val.parentElement;
+						let i = 0;
+						while(div.children[i]!=parent){i+=1;}
+						while(parent.childElementCount>0){
+							parent.childNodes[0].remove();
+						}
+						this.face[i].material.dispose();
+						this.face[i].dispose();
+						this.face.splice(i,1);
+						this.faceVertex.splice(i,1);
+						parent.remove();
+						this.refreshFunction();
+						/*
+						this.div = document.getElementById("diceConsole");
+						div = this.div;
+						children = div.childElementCount;
+						btn = div.querySelectorAll("div button");
+						*/
+					})
+				})
+			}
+			static refreshFunction(){
+				this.div.querySelectorAll("div").forEach((inp,ind)=>{
+					inp.addEventListener("change",()=>{
+						let val = inp.querySelectorAll("input");
+						this.face[ind].position = new BABYLON.Vector3(val[0].value,val[1].value,val[2].value);
+						let qx = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X,val[3].value*Math.PI/180);
+						let qy = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Y,val[4].value*Math.PI/180);
+						let qz = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z,val[5].value*Math.PI/180);
+						let q = qz.multiply(qy).multiply(qx)
+						this.face[ind].rotationQuaternion = q;
+					})
+					inp.addEventListener("mouseover",()=>{
+						for(let i = 0; i<this.face.length; i+=1){
+							if(i===ind){this.face[i].visibility=1;}
+							else{this.face[i].visibility=0.1;}
+						}
+					})
+					inp.addEventListener("mouseout",()=>{
+						for(let i = 0; i<this.face.length; i+=1){
+							this.face[i].visibility = 1;
+						}
+					})
+				})
+				let btn = this.div.querySelectorAll("div button");
+				btn.forEach((val,ind)=>{
+					val.addEventListener("click",()=>{
+						let parent = val.parentElement;
+						let i = 0;
+						while(this.div.children[i]!=parent){i+=1;}
+						while(parent.childElementCount>0){
+							parent.childNodes[0].remove();
+						}
+						this.face[i].material.dispose();
+						this.face[i].dispose();
+						this.face.splice(i,1);
+						parent.remove();
+						this.div = document.getElementById("diceConsole");
+						children = this.div.childElementCount;
+						btn = this.div.querySelectorAll("div button");
+						this.refreshFunction();
+					})
+				})
+			}
+			static update(){
+				let input = interfaces[1].querySelectorAll("#diceConsole div input");
+				for(let i = 0; i<this.face.length; i++){
+					let angle;// = this.face[i].rotationQuaternion.toEulerAngles();
+					if(this.face[i].rotationQuaternion!=null){
+						angle = this.face[i].rotationQuaternion.toEulerAngles();
+					}else{
+						angle = this.face[i].rotation;
+					}
+					input[i*6].value = this.face[i].position.x;
+					input[i*6+1].value = this.face[i].position.y;
+					input[i*6+2].value = this.face[i].position.z;
+					input[i*6+3].value = angle.x*180/Math.PI;
+					input[i*6+4].value = angle.y*180/Math.PI;
+					input[i*6+5].value = angle.z*180/Math.PI;
+				}
+			}
+			static makeDice(){
+				this.dice = BABYLON.Mesh.MergeMeshes(this.face,false,true,undefined,false,true);
+				let minY = this.dice.getBoundingInfo().boundingBox.minimum.y;
+				this.dice.position.y += (-1-minY);
+				this.ground = BABYLON.MeshBuilder.CreateBox("ground",{width:20,height:0.5,depth:20});
+				this.ground.position.y = -1.25;
+			}
+			static deleteDice(){
+				this.ground.dispose();
+				if(this.dice===null){return;}
+				if(this.dice.material!=null){this.dice.material.dispose();}
+				this.dice.dispose();
+				this.dice = null;
+			}
+			static hideSource(bool){
+				for(let i = 0; i<this.face.length; i+=1){this.face[i].setEnabled(!bool);}
+			}
+			static deleteInput(){
+				let div = this.div;//interfaces[1].getElementsByTagName("div")[0];
+				let children = div.childElementCount;
+				for(let i = 0; i<children; i++){
+					div.children[0].remove();
+				}
+				//this.face = [];
+				//this.faceVertex = [];
+				this.refreshFunction();
+				/*
+				this.div = document.getElementById("diceConsole");
+				div = this.div;
+				children = div.childElementCount;
+				btn = div.querySelectorAll("div button");
+					*/
+			}
+		}
+        class Face{
+			static vertex = [];
+			static color = document.getElementById("color").value;
+			static draw(){
+				faceCanvas.width = faceCanvas.getBoundingClientRect().width;
+				faceCanvas.height = faceCanvas.getBoundingClientRect().height;
+				ctx.fillStyle = "white";
+				ctx.fillRect(0,0,faceCanvas.width,faceCanvas.height);
+				let gridStartX = (faceCanvas.width-400)/2;
+				let gridStartY = (faceCanvas.height-400)/2;
+				for(let i = 0; i<=20; i++){
+					ctx.beginPath();
+					ctx.moveTo(gridStartX+i*20,gridStartY);
+					ctx.lineTo(gridStartX+i*20,gridStartY+400);
+					ctx.strokeStyle = "gray";
+					ctx.stroke();
+					ctx.beginPath();
+					ctx.moveTo(gridStartX,gridStartY+i*20);
+					ctx.lineTo(gridStartX+400,gridStartY+i*20);
+					ctx.stroke();
+					ctx.fillStyle = "black";
+					ctx.fillText(i,gridStartX-15,gridStartY+405-i*20);
+					ctx.fillText(i,gridStartX-5+i*20,gridStartY+415);
+				}
+				ctx.fillStyle = this.color+"7F";
+				ctx.beginPath();
+				if(this.vertex.length>0){
+					ctx.moveTo(this.vertex[0][0]*20+gridStartX,-this.vertex[0][1]*20+gridStartY+400);
+					ctx.fillRect(this.vertex[0][0]*20+gridStartX-2,-this.vertex[0][1]*20+gridStartY+398,5,5);
+				}
+				for(let i = 1; i<this.vertex.length; i++){
+					ctx.lineTo(this.vertex[i][0]*20+gridStartX,-this.vertex[i][1]*20+gridStartY+400);
+					ctx.fillRect(this.vertex[i][0]*20+gridStartX-2,-this.vertex[i][1]*20+gridStartY+398,5,5);
+				}
+				ctx.strokeStyle = "black";
+				ctx.fill();
+				ctx.closePath();
+				ctx.stroke();
+			}
+			static addVertex(x,y){this.vertex.push([x,y,this.vertex.length]);}
+			static updateVertexX(ind,x){this.vertex[ind][0]=x;}
+			static updateVertexY(ind,y){this.vertex[ind][1]=y;}
+			static addShape(val){
+				let sides;
+				if(val==="custom"){sides=0;}
+				if(val==="triangle"){sides=3;}
+				if(val==="square"){sides=4;}
+				if(val==="pentagon"){sides=5;}
+				if(val==="hexagon"){sides=6;}
+				if(val==="octagon"){sides=8;}
+				for(let i = 0; i<sides; i++){
+					this.vertex.push([Math.cos((i*360/sides+90)*Math.PI/180)+10,Math.sin((i*360/sides+90)*Math.PI/180)+10,this.vertex.length]);
+				}
+			}
+			static addInput(){
+				let div = document.getElementsByClassName("interface")[0];
+				let start = Math.floor(div.getElementsByTagName("input").length/2);
+				for(let i = start; i<this.vertex.length; i+=1){
+					let br = document.createElement("br");
+					interfaces[0].appendChild(br);
+					for(let j = 0; j<2; j+=1){
+						let lbl = document.createElement("label");
+						lbl.for = j%2?"y":"x"
+						lbl.innerHTML = j%2?"Y:":"X:"
+						let input = document.createElement("input");
+						input.value = this.vertex[i][j];
+						input.style.width = "60px";
+						input.addEventListener("change",()=>{
+							if(j===0){
+								this.updateVertexX(i,Number(input.value));
+							}else if(j===1){
+								this.updateVertexY(i,Number(input.value));
+							}
+							this.draw();
+						})
+						interfaces[0].appendChild(lbl);
+						interfaces[0].appendChild(input);
+					}
+					let span = document.createElement("button")
+					span.innerHTML = "Delete";//String.fromCodePoint(0x274c);
+					span.style.cursor = "default";
+					span.style.backgroundColor = "rgb(255,200,200)";
+					interfaces[0].append(span);
+					span.addEventListener("click",()=>{
+						for(let i = 0; i<5; i++){
+							span.previousElementSibling.remove();
+						}
+						for(let iter = 0; iter<this.vertex.length; iter+=1){
+							if(i===this.vertex[iter][2]){
+								this.vertex.splice(iter,1);
+								break;
+							}
+						}
+						span.remove();
+						this.draw();
+					})
+				}
+			}
+			static center(){
+				let xOut = 0, yOut = 0;
+				for(let i of this.vertex){
+					xOut+=i[0];
+					yOut+=i[1];
+				}
+				xOut/=this.vertex.length;
+				yOut/=this.vertex.length;
+				for(let i of this.vertex){
+					i[0]-=xOut;
+					i[1]-=yOut;
+				}
+			}
+			static clear(){
+				document.getElementById("shape").value = "custom"
+				this.vertex = [];
+				let input = interfaces[0].childNodes;
+				while(input.length>14){
+					interfaces[0].removeChild(input[input.length-1])
+				}
+			}
+		}
+		document.getElementById("color").addEventListener("change",(event)=>{
+			Face.color = event.target.value;
+			Face.draw();
+		})
+		document.getElementById("shape").addEventListener("change",(event)=>{
+			let shape = event.target.value;
+			Face.clear();
+			Face.addShape(shape);
+			Face.addInput();
+			Face.draw();
+		})
+		faceCanvas.addEventListener("click",(event)=>{
+			let mx = map(event.clientX,faceCanvas.width/2-200,faceCanvas.width/2+200,0,20);
+			let my = map(event.clientY,faceCanvas.height/2-200,faceCanvas.height/2+200,20,0);
+			if(mx<0||mx>20||my<0||my>20){return;}
+			Face.addVertex(mx,my);
+			Face.addInput();
+			Face.draw();
+		})
+		interfaces[0].getElementsByTagName("button")[0].addEventListener("click",()=>{
+			document.getElementById("face").style.display = "none";
+			document.getElementById("dice").style.display = "block";
+		})
+		interfaces[0].getElementsByTagName("button")[1].addEventListener("click",()=>{
+			document.getElementById("face").style.display = "none";
+			document.getElementById("dice").style.display = "block";
+			if(Face.vertex.length===0){return;}
+			Face.center();
+			Grid.addShape(Face.vertex,Face.color)
+			Grid.addInput();
+			Grid.update();
+			Face.clear();
+		})
+		interfaces[1].getElementsByClassName("editDice")[0].getElementsByTagName("button")[0].addEventListener("click",()=>{
+			//Add face
+			document.getElementById("face").style.display = "block";
+			document.getElementById("dice").style.display = "none";
+			Face.clear();
+			Face.draw();
+		})
+		interfaces[1].getElementsByClassName("editDice")[0].getElementsByTagName("button")[1].addEventListener("click",()=>{
+			//Want to roll dice
+			if(Grid.face.length===0){return;}
+			document.getElementsByClassName("editDice")[0].style.display = "none";
+			document.getElementsByClassName("editDice")[1].style.display = "block";
+			document.getElementById("diceConsole").style.display = "none";
+			Grid.makeDice();
+			Grid.hideSource(true);
+			Grid.dispose();
+			Grid.rollDice = true;
+		})
+		interfaces[1].getElementsByClassName("editDice")[1].getElementsByTagName("button")[0].addEventListener("click",()=>{
+			//Want to edit dice
+			document.getElementsByClassName("editDice")[0].style.display = "block";
+			document.getElementsByClassName("editDice")[1].style.display = "none";
+			document.getElementById("diceConsole").style.display = "block";
+			Grid.deleteDice();
+			Grid.hideSource(false);
+			Grid.draw();
+			Grid.rollDice = false;
+		})
+		interfaces[1].getElementsByClassName("editDice")[1].getElementsByTagName("button")[1].addEventListener("click",()=>{
+			//Roll Dice
+			if(aggr!==null&&aggr!==undefined){
+				aggr.body.dispose();
+				aggr.shape.dispose();
+			}
+			aggr = new BABYLON.PhysicsAggregate(Grid.dice,BABYLON.PhysicsShapeType.MESH,{mass:1,friction:0.75,restitution:0.5},scene);
+			aggr.body.setLinearVelocity(BABYLON.Vector3.Zero());
+			aggr.body.setAngularVelocity(BABYLON.Vector3.Zero());
+			aggr.body.setLinearDamping(0);
+			aggr.body.setAngularDamping(0);
+			aggr.body.setLinearVelocity(new BABYLON.Vector3(0, 10, 0));
+			aggr.body.setAngularVelocity(new BABYLON.Vector3(0, 3, 3));
+			let groundAggr = new BABYLON.PhysicsAggregate(Grid.ground,BABYLON.PhysicsShapeType.BOX,{mass:0},scene);
+		})
+		document.getElementsByClassName("editDice")[0].getElementsByTagName("button")[2].addEventListener("click",()=>{
+			if(Grid.face.length===0){return;}
+			let data = Grid.face.map(f=>({
+					position:f.position.asArray(),
+					rotation:f.rotationQuaternion.toEulerAngles().asArray(),
+					color:f.material.diffuseColor.asArray(),
+					vertex:Grid.faceVertex[Grid.face.indexOf(f)] //Grid.getShapeVertex(Grid.face.indexOf(f)).map(v=>v.asArray())
+				}))
+			let blob = new Blob([JSON.stringify(data)],{type:"application/json"});
+			let url = URL.createObjectURL(blob);
+			let a = document.createElement("a");
+			a.href = url;
+			a.download = "dice.json";
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+		})
+		document.getElementsByClassName("editDice")[0].getElementsByTagName("input")[0].addEventListener("change",()=>{
+			let file = document.getElementsByClassName("editDice")[0].getElementsByTagName("input")[0].files[0];
+			//if(file===undefined){return;}
+			let reader = new FileReader();
+			reader.onload = (event)=>{
+				let data = JSON.parse(event.target.result);
+				Grid.face.forEach(f=>{f.dispose();f.material.dispose();});
+				Grid.face = [];
+				Grid.deleteInput();
+				for(let i = 0; i<data.length; i++){
+					Grid.addShape(data[i].vertex,`#${Math.round(data[i].color[0]*255).toString(16).padStart(2,"0")}${Math.round(data[i].color[1]*255).toString(16).padStart(2,"0")}${Math.round(data[i].color[2]*255).toString(16).padStart(2,"0")}`);
+					Grid.face[ind].position = new BABYLON.Vector3(Number(data[i].position[0]),Number(data[i].position[1]),Number(data[i].position[2]));
+					Grid.face[ind].rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(data[i].rotation[1],data[i].rotation[0],data[i].rotation[2]);
+				}
+				
+				Grid.addInput();
+				Grid.update();
+			}
+			reader.readAsText(file);
+		})
+		interfaces[1].querySelectorAll("#diceConsole div input").forEach((val,ind)=>{
+			val.addEventListener("change",()=>{
+				if(ind<=2){
+					Grid.face[Math.floor(ind/6)].position = new BABYLON.Vector3(val.value)
+				}else{
+					Grid.face[Math.floor(ind/6)].rotation = new BABYLON.Vector3(val.value*Math.PI/180);
+				}
+			})
+		})
+
+		Grid.draw();
+		scene.onBeforeRenderObservable.add((event)=>{
+			if(!Grid.rollDice){
+				Grid.scale();
+			}
+		})
+		engine.runRenderLoop(()=>{scene.render()});
+    </script>
+</html>
