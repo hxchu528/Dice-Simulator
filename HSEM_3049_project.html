@@ -560,8 +560,8 @@
 				Grid.deleteInput();
 				for(let i = 0; i<data.length; i++){
 					Grid.addShape(data[i].vertex,`#${Math.round(data[i].color[0]*255).toString(16).padStart(2,"0")}${Math.round(data[i].color[1]*255).toString(16).padStart(2,"0")}${Math.round(data[i].color[2]*255).toString(16).padStart(2,"0")}`);
-					Grid.face[ind].position = new BABYLON.Vector3(Number(data[i].position[0]),Number(data[i].position[1]),Number(data[i].position[2]));
-					Grid.face[ind].rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(data[i].rotation[1],data[i].rotation[0],data[i].rotation[2]);
+					Grid.face[i].position = new BABYLON.Vector3(Number(data[i].position[0]),Number(data[i].position[1]),Number(data[i].position[2]));
+					Grid.face[i].rotationQuaternion = BABYLON.Quaternion.RotationYawPitchRoll(data[i].rotation[1],data[i].rotation[0],data[i].rotation[2]);
 				}
 				
 				Grid.addInput();
