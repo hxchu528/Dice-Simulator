@@ -79,15 +79,6 @@
 			hk = new BABYLON.HavokPlugin(true,havokInstance);
 			scene.enablePhysics(new BABYLON.Vector3(0,-9.8,0),hk);
 		})
-		function ensureCCW(vertices) {
-			let sum = 0;
-			for (let i = 0; i < vertices.length; i++) {
-				let v1 = vertices[i];
-				let v2 = vertices[(i + 1) % vertices.length];
-				sum += (v2[0] - v1[0]) * (v2[1] + v1[1]);
-			}
-			return sum > 0 ? vertices.reverse() : vertices;
-		}
 		function map(n,or1,or2,r1,r2){return r1+(r2-r1)*((n-or1)/(or2-or1));}
 		class Grid{
 			static options = [];
@@ -177,7 +168,7 @@
 				let div = document.getElementById("diceConsole");
 				let children = div.childElementCount;
 				for(let i = children; i<this.face.length; i++){
-					let angle;// = this.face[i].rotationQuaternion.toEulerAngles();
+					let angle;
 					if(this.face[i].rotationQuaternion!=null){
 						angle = this.face[i].rotationQuaternion.toEulerAngles();
 					}else{
@@ -314,20 +305,12 @@
 				for(let i = 0; i<this.face.length; i+=1){this.face[i].setEnabled(!bool);}
 			}
 			static deleteInput(){
-				let div = this.div;//interfaces[1].getElementsByTagName("div")[0];
+				let div = this.div;
 				let children = div.childElementCount;
 				for(let i = 0; i<children; i++){
 					div.children[0].remove();
 				}
-				//this.face = [];
-				//this.faceVertex = [];
 				this.refreshFunction();
-				/*
-				this.div = document.getElementById("diceConsole");
-				div = this.div;
-				children = div.childElementCount;
-				btn = div.querySelectorAll("div button");
-					*/
 			}
 		}
         class Face{
@@ -409,7 +392,7 @@
 						interfaces[0].appendChild(input);
 					}
 					let span = document.createElement("button")
-					span.innerHTML = "Delete";//String.fromCodePoint(0x274c);
+					span.innerHTML = "Delete";
 					span.style.cursor = "default";
 					span.style.backgroundColor = "rgb(255,200,200)";
 					interfaces[0].append(span);
@@ -526,6 +509,7 @@
 			let ang = [0,0,0].map(i=>Math.random()*20-10);
 			aggr.body.setAngularVelocity(new BABYLON.Vector3(ang[0], ang[1], ang[2]));
 			let groundAggr = new BABYLON.PhysicsAggregate(Grid.ground,BABYLON.PhysicsShapeType.BOX,{mass:0},scene);
+			console.log(aggr.body.isSleeping?.());
 		})
 		document.getElementsByClassName("editDice")[0].getElementsByTagName("button")[2].addEventListener("click",()=>{
 			if(Grid.face.length===0){return;}
@@ -533,7 +517,7 @@
 					position:f.position.asArray(),
 					rotation:f.rotationQuaternion.toEulerAngles().asArray(),
 					color:f.material.diffuseColor.asArray(),
-					vertex:Grid.faceVertex[Grid.face.indexOf(f)] //Grid.getShapeVertex(Grid.face.indexOf(f)).map(v=>v.asArray())
+					vertex:Grid.faceVertex[Grid.face.indexOf(f)]
 				}))
 			let blob = new Blob([JSON.stringify(data)],{type:"application/json"});
 			let url = URL.createObjectURL(blob);
@@ -546,7 +530,7 @@
 		})
 		document.getElementsByClassName("editDice")[0].getElementsByTagName("input")[0].addEventListener("change",()=>{
 			let file = document.getElementsByClassName("editDice")[0].getElementsByTagName("input")[0].files[0];
-			//if(file===undefined){return;}
+			if(file===undefined){return;}
 			let reader = new FileReader();
 			reader.onload = (event)=>{
 				let data = JSON.parse(event.target.result);
