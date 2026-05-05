@@ -174,7 +174,7 @@
 				return worldVertices;
 			}
 			static addInput(){
-				let div = this.div;//interfaces[1].getElementsByTagName("div")[0];
+				let div = document.getElementById("diceConsole");
 				let children = div.childElementCount;
 				for(let i = children; i<this.face.length; i++){
 					let angle;// = this.face[i].rotationQuaternion.toEulerAngles();
@@ -196,7 +196,7 @@
 					`
 				}
 				div.querySelectorAll("div").forEach((inp,ind)=>{
-					inp.addEventListener("change",()=>{
+					inp.onchange = ()=>{
 						let val = inp.querySelectorAll("input");
 						this.face[ind].position = new BABYLON.Vector3(val[0].value,val[1].value,val[2].value);
 						let qx = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X,val[3].value*Math.PI/180);
@@ -204,22 +204,22 @@
 						let qz = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z,val[5].value*Math.PI/180);
 						let q = qz.multiply(qy).multiply(qx)
 						this.face[ind].rotationQuaternion = q;
-					})
-					inp.addEventListener("mouseover",()=>{
+					}
+					inp.onmouseover = ()=>{
 						for(let i = 0; i<this.face.length; i+=1){
 							if(i===ind){this.face[i].visibility=1;}
 							else{this.face[i].visibility=0.1;}
 						}
-					})
-					inp.addEventListener("mouseout",()=>{
+					}
+					inp.onmouseout = ()=>{
 						for(let i = 0; i<this.face.length; i+=1){
 							this.face[i].visibility = 1;
 						}
-					})
+					}
 				})
-				let btn = div.querySelectorAll("div button");
+				let btn = this.div.querySelectorAll("div button");
 				btn.forEach((val,ind)=>{
-					val.addEventListener("click",()=>{
+					val.onclick = ()=>{
 						let parent = val.parentElement;
 						let i = 0;
 						while(div.children[i]!=parent){i+=1;}
@@ -232,18 +232,13 @@
 						this.faceVertex.splice(i,1);
 						parent.remove();
 						this.refreshFunction();
-						/*
-						this.div = document.getElementById("diceConsole");
-						div = this.div;
-						children = div.childElementCount;
-						btn = div.querySelectorAll("div button");
-						*/
-					})
+					}
 				})
 			}
 			static refreshFunction(){
+				this.div = document.getElementById("diceConsole");
 				this.div.querySelectorAll("div").forEach((inp,ind)=>{
-					inp.addEventListener("change",()=>{
+					inp.onchange = ()=>{
 						let val = inp.querySelectorAll("input");
 						this.face[ind].position = new BABYLON.Vector3(val[0].value,val[1].value,val[2].value);
 						let qx = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.X,val[3].value*Math.PI/180);
@@ -251,23 +246,24 @@
 						let qz = BABYLON.Quaternion.RotationAxis(BABYLON.Axis.Z,val[5].value*Math.PI/180);
 						let q = qz.multiply(qy).multiply(qx)
 						this.face[ind].rotationQuaternion = q;
-					})
-					inp.addEventListener("mouseover",()=>{
+					}
+					inp.onmouseover = ()=>{
 						for(let i = 0; i<this.face.length; i+=1){
 							if(i===ind){this.face[i].visibility=1;}
 							else{this.face[i].visibility=0.1;}
 						}
-					})
-					inp.addEventListener("mouseout",()=>{
+					}
+					inp.onmouseout = ()=>{
 						for(let i = 0; i<this.face.length; i+=1){
 							this.face[i].visibility = 1;
 						}
-					})
+					}
 				})
-				let btn = this.div.querySelectorAll("div button");
-				btn.forEach((val,ind)=>{
-					val.addEventListener("click",()=>{
-						let parent = val.parentElement;
+				let btn = document.getElementById("diceConsole").querySelectorAll("div button")//this.div.querySelectorAll("div button");
+				let val = 0;
+				while(val<btn.length){
+					btn[val].click = function(){
+						let parent = btn[val].parentElement;
 						let i = 0;
 						while(this.div.children[i]!=parent){i+=1;}
 						while(parent.childElementCount>0){
@@ -276,13 +272,12 @@
 						this.face[i].material.dispose();
 						this.face[i].dispose();
 						this.face.splice(i,1);
+						this.faceVertex.splice(i,1);
 						parent.remove();
-						this.div = document.getElementById("diceConsole");
-						children = this.div.childElementCount;
-						btn = this.div.querySelectorAll("div button");
 						this.refreshFunction();
-					})
-				})
+					}
+					val+=1;
+				}
 			}
 			static update(){
 				let input = interfaces[1].querySelectorAll("#diceConsole div input");
