@@ -522,7 +522,7 @@
 				aggr.body.dispose();
 				aggr.shape.dispose();
 			}
-			aggr = new BABYLON.PhysicsAggregate(Grid.dice,BABYLON.PhysicsShapeType.MESH,{mass:1,friction:0.75,restitution:0.5},scene);
+			aggr = new BABYLON.PhysicsAggregate(Grid.dice,BABYLON.PhysicsShapeType.MESH,{mass:1,friction:0.625,restitution:0.5},scene);
 			aggr.body.setLinearVelocity(BABYLON.Vector3.Zero());
 			aggr.body.setAngularVelocity(BABYLON.Vector3.Zero());
 			aggr.body.setLinearDamping(0);
