@@ -28,7 +28,7 @@
 
 #### Saving dice
 1. Click `Export`. This will generate a JSON file containing the dice information.
-2. The JSON does NOT contain a valid file for 3d printing and dice manufacturing. The dice in the file can only be run on the web app.
+2. The JSON does NOT contain a valid file for 3d printing and dice manufacturing. The dice can only be run on this web app.
 
 #### Uploading dice
-1. Click `Load Dice File`, and select the JSON file containing the dice information. The data will populate the interface for further editing/demonstration
+1. Click `Load Dice File`, and select your JSON dice file. The data will populate the interface for further editing/rolling.
